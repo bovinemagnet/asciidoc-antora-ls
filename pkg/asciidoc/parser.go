@@ -115,20 +115,18 @@ func (p *Parser) GetDocumentSymbols(content string) []protocol.DocumentSymbol {
 }
 
 func formatHeadingInfo(level int, text string) string {
-	return "**Heading Level " + fmt.Sprintf("%d", level) + "**\n\n" + text
+	return fmt.Sprintf("**Heading Level %d**\n\n%s", level, text)
 }
 
 func formatAttributeInfo(name, value string) string {
-	info := "**Document Attribute**\n\n"
-	info += "Name: `" + name + "`"
 	if value != "" {
-		info += "\n\nValue: `" + value + "`"
+		return fmt.Sprintf("**Document Attribute**\n\nName: `%s`\n\nValue: `%s`", name, value)
 	}
-	return info
+	return fmt.Sprintf("**Document Attribute**\n\nName: `%s`", name)
 }
 
 func formatIncludeInfo(path string) string {
-	return "**Include Directive**\n\nPath: `" + path + "`"
+	return fmt.Sprintf("**Include Directive**\n\nPath: `%s`", path)
 }
 
 func getAttributeCompletions() []protocol.CompletionItem {

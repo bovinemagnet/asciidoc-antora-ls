@@ -1,0 +1,64 @@
+= Example AsciiDoc Document
+:toc: left
+:author: John Doe
+:revdate: 2025-12-29
+:description: An example AsciiDoc document showing LSP features
+
+This is an example AsciiDoc document that demonstrates the features of the asciidoc-antora-ls language server.
+
+== Introduction
+
+The language server provides intelligent features for AsciiDoc editing.
+
+=== Document Attributes
+
+You can use document attributes like {author} and reference other documents.
+
+=== Code Blocks
+
+Here's an example code block:
+
+[source,go]
+----
+package main
+
+import "fmt"
+
+func main() {
+    fmt.Println("Hello, World!")
+}
+----
+
+== Features Demonstration
+
+=== Hover Information
+
+Hover over headings, attributes, or includes to see contextual information.
+
+=== Completions
+
+Start typing `:` to see document attribute completions, or try typing `xref:` for cross-reference completions.
+
+=== Document Symbols
+
+The language server provides a document outline based on headings.
+
+== Antora Integration
+
+When working with Antora projects, you get additional features:
+
+=== Cross References
+
+Reference other pages in your Antora site:
+
+* Same module: xref:other-page.adoc[Another Page]
+* Different module: xref:admin:guide.adoc[Admin Guide]
+* Different component: xref:1.0@docs:ROOT:index.adoc[Docs v1.0]
+
+=== Page Attributes
+
+Use Antora page attributes like {component-name} and {page-module}.
+
+== Conclusion
+
+This language server enhances the AsciiDoc editing experience with IDE-like features.

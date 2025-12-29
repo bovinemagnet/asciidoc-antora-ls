@@ -1,6 +1,7 @@
 package asciidoc
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -114,7 +115,7 @@ func (p *Parser) GetDocumentSymbols(content string) []protocol.DocumentSymbol {
 }
 
 func formatHeadingInfo(level int, text string) string {
-	return "**Heading Level " + string(rune('0'+level)) + "**\n\n" + text
+	return "**Heading Level " + fmt.Sprintf("%d", level) + "**\n\n" + text
 }
 
 func formatAttributeInfo(name, value string) string {

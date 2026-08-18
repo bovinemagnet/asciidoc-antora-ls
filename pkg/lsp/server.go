@@ -237,121 +237,147 @@ func (s *Server) runJSONRPC(ctx context.Context, reader interface{ Read([]byte) 
 
 // Handle implements jsonrpc2.Handler
 func (s *Server) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Request) {
+	reply := func(result interface{}) {
+		if err := conn.Reply(ctx, req.ID, result); err != nil {
+			log.Printf("Failed to reply to %s: %v", req.Method, err)
+		}
+	}
+	replyWithError := func(responseErr *jsonrpc2.Error) {
+		if err := conn.ReplyWithError(ctx, req.ID, responseErr); err != nil {
+			log.Printf("Failed to send %s error response: %v", req.Method, err)
+		}
+	}
+
 	switch req.Method {
 	case "initialize":
 		var params protocol.InitializeParams
 		if err := json.Unmarshal(*req.Params, &params); err != nil {
-			conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{Code: jsonrpc2.CodeInvalidParams, Message: err.Error()})
+			replyWithError(&jsonrpc2.Error{Code: jsonrpc2.CodeInvalidParams, Message: err.Error()})
 			return
 		}
 		result, err := s.Initialize(ctx, &params)
 		if err != nil {
-			conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{Code: jsonrpc2.CodeInternalError, Message: err.Error()})
+			replyWithError(&jsonrpc2.Error{Code: jsonrpc2.CodeInternalError, Message: err.Error()})
 			return
 		}
-		conn.Reply(ctx, req.ID, result)
+		reply(result)
 
 	case "initialized":
 		var params protocol.InitializedParams
 		if err := json.Unmarshal(*req.Params, &params); err != nil {
-			conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{Code: jsonrpc2.CodeInvalidParams, Message: err.Error()})
+			replyWithError(&jsonrpc2.Error{Code: jsonrpc2.CodeInvalidParams, Message: err.Error()})
 			return
 		}
-		s.Initialized(ctx, &params)
+		if err := s.Initialized(ctx, &params); err != nil {
+			log.Printf("Failed to handle initialized notification: %v", err)
+		}
 
 	case "shutdown":
-		s.Shutdown(ctx)
-		conn.Reply(ctx, req.ID, nil)
+		if err := s.Shutdown(ctx); err != nil {
+			replyWithError(&jsonrpc2.Error{Code: jsonrpc2.CodeInternalError, Message: err.Error()})
+			return
+		}
+		reply(nil)
 
 	case "exit":
-		s.Exit(ctx)
+		if err := s.Exit(ctx); err != nil {
+			log.Printf("Failed to handle exit notification: %v", err)
+		}
 
 	case "textDocument/didOpen":
 		var params protocol.DidOpenTextDocumentParams
 		if err := json.Unmarshal(*req.Params, &params); err != nil {
 			return
 		}
-		s.DidOpen(ctx, &params)
+		if err := s.DidOpen(ctx, &params); err != nil {
+			log.Printf("Failed to handle didOpen notification: %v", err)
+		}
 
 	case "textDocument/didChange":
 		var params protocol.DidChangeTextDocumentParams
 		if err := json.Unmarshal(*req.Params, &params); err != nil {
 			return
 		}
-		s.DidChange(ctx, &params)
+		if err := s.DidChange(ctx, &params); err != nil {
+			log.Printf("Failed to handle didChange notification: %v", err)
+		}
 
 	case "textDocument/didSave":
 		var params protocol.DidSaveTextDocumentParams
 		if err := json.Unmarshal(*req.Params, &params); err != nil {
 			return
 		}
-		s.DidSave(ctx, &params)
+		if err := s.DidSave(ctx, &params); err != nil {
+			log.Printf("Failed to handle didSave notification: %v", err)
+		}
 
 	case "textDocument/didClose":
 		var params protocol.DidCloseTextDocumentParams
 		if err := json.Unmarshal(*req.Params, &params); err != nil {
 			return
 		}
-		s.DidClose(ctx, &params)
+		if err := s.DidClose(ctx, &params); err != nil {
+			log.Printf("Failed to handle didClose notification: %v", err)
+		}
 
 	case "textDocument/hover":
 		var params protocol.HoverParams
 		if err := json.Unmarshal(*req.Params, &params); err != nil {
-			conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{Code: jsonrpc2.CodeInvalidParams, Message: err.Error()})
+			replyWithError(&jsonrpc2.Error{Code: jsonrpc2.CodeInvalidParams, Message: err.Error()})
 			return
 		}
 		result, err := s.Hover(ctx, &params)
 		if err != nil {
-			conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{Code: jsonrpc2.CodeInternalError, Message: err.Error()})
+			replyWithError(&jsonrpc2.Error{Code: jsonrpc2.CodeInternalError, Message: err.Error()})
 			return
 		}
-		conn.Reply(ctx, req.ID, result)
+		reply(result)
 
 	case "textDocument/completion":
 		var params protocol.CompletionParams
 		if err := json.Unmarshal(*req.Params, &params); err != nil {
-			conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{Code: jsonrpc2.CodeInvalidParams, Message: err.Error()})
+			replyWithError(&jsonrpc2.Error{Code: jsonrpc2.CodeInvalidParams, Message: err.Error()})
 			return
 		}
 		result, err := s.Completion(ctx, &params)
 		if err != nil {
-			conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{Code: jsonrpc2.CodeInternalError, Message: err.Error()})
+			replyWithError(&jsonrpc2.Error{Code: jsonrpc2.CodeInternalError, Message: err.Error()})
 			return
 		}
-		conn.Reply(ctx, req.ID, result)
+		reply(result)
 
 	case "textDocument/definition":
 		var params protocol.DefinitionParams
 		if err := json.Unmarshal(*req.Params, &params); err != nil {
-			conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{Code: jsonrpc2.CodeInvalidParams, Message: err.Error()})
+			replyWithError(&jsonrpc2.Error{Code: jsonrpc2.CodeInvalidParams, Message: err.Error()})
 			return
 		}
 		result, err := s.Definition(ctx, &params)
 		if err != nil {
-			conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{Code: jsonrpc2.CodeInternalError, Message: err.Error()})
+			replyWithError(&jsonrpc2.Error{Code: jsonrpc2.CodeInternalError, Message: err.Error()})
 			return
 		}
-		conn.Reply(ctx, req.ID, result)
+		reply(result)
 
 	case "textDocument/documentSymbol":
 		var params protocol.DocumentSymbolParams
 		if err := json.Unmarshal(*req.Params, &params); err != nil {
-			conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{Code: jsonrpc2.CodeInvalidParams, Message: err.Error()})
+			replyWithError(&jsonrpc2.Error{Code: jsonrpc2.CodeInvalidParams, Message: err.Error()})
 			return
 		}
 		result, err := s.DocumentSymbol(ctx, &params)
 		if err != nil {
-			conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{Code: jsonrpc2.CodeInternalError, Message: err.Error()})
+			replyWithError(&jsonrpc2.Error{Code: jsonrpc2.CodeInternalError, Message: err.Error()})
 			return
 		}
-		conn.Reply(ctx, req.ID, result)
+		reply(result)
 
 	default:
 		if req.Notif {
 			// Ignore unknown notifications
 			return
 		}
-		conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{Code: jsonrpc2.CodeMethodNotFound, Message: "method not found"})
+		replyWithError(&jsonrpc2.Error{Code: jsonrpc2.CodeMethodNotFound, Message: "method not found"})
 	}
 }
 

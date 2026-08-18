@@ -108,7 +108,9 @@ func TestServer_DidChange(t *testing.T) {
 			Text:    "Initial content",
 		},
 	}
-	server.DidOpen(ctx, openParams)
+	if err := server.DidOpen(ctx, openParams); err != nil {
+		t.Fatalf("DidOpen failed: %v", err)
+	}
 
 	// Now change it
 	changeParams := &protocol.DidChangeTextDocumentParams{
@@ -155,7 +157,9 @@ func TestServer_DidClose(t *testing.T) {
 			Text:    "Test content",
 		},
 	}
-	server.DidOpen(ctx, openParams)
+	if err := server.DidOpen(ctx, openParams); err != nil {
+		t.Fatalf("DidOpen failed: %v", err)
+	}
 
 	// Now close it
 	closeParams := &protocol.DidCloseTextDocumentParams{

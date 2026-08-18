@@ -1,4 +1,6 @@
-.PHONY: build test clean install lint
+GO_FILES := $(shell find . -type f -name '*.go')
+
+.PHONY: build install test test-coverage lint clean run fmt fmt-check vet
 
 # Build the language server
 build:
@@ -18,9 +20,7 @@ test-coverage:
 	go tool cover -html=coverage.out -o coverage.html
 
 # Lint the code
-lint:
-	go vet ./...
-	go fmt ./...
+lint: fmt-check vet
 
 # Clean build artifacts
 clean:
@@ -33,7 +33,16 @@ run: build
 
 # Format code
 fmt:
-	go fmt ./...
+	gofmt -s -w $(GO_FILES)
+
+# Check formatting without changing files
+fmt-check:
+	@unformatted="$$(gofmt -s -l $(GO_FILES))"; \
+	if [ -n "$$unformatted" ]; then \
+		echo "Code is not formatted. Run 'make fmt'"; \
+		echo "$$unformatted"; \
+		exit 1; \
+	fi
 
 # Check for common errors
 vet:

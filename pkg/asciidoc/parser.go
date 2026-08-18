@@ -5,35 +5,43 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/bovinemagnet/asciidoc-antora-ls/pkg/position"
 	"go.lsp.dev/protocol"
 )
 
 // Parser handles AsciiDoc document parsing
 type Parser struct {
-	headingRegex   *regexp.Regexp
-	attributeRegex *regexp.Regexp
-	includeRegex   *regexp.Regexp
-	xrefRegex      *regexp.Regexp
+	headingRegex     *regexp.Regexp
+	attributeRegex   *regexp.Regexp
+	includeRegex     *regexp.Regexp
+	xrefRegex        *regexp.Regexp
+	positionEncoding position.Encoding
 }
 
 // NewParser creates a new AsciiDoc parser
 func NewParser() *Parser {
 	return &Parser{
-		headingRegex:   regexp.MustCompile(`^(=+)\s+(.+)$`),
-		attributeRegex: regexp.MustCompile(`^:([a-zA-Z0-9_-]+):\s*(.*)$`),
-		includeRegex:   regexp.MustCompile(`^include::([^\[]+)\[([^\]]*)\]$`),
-		xrefRegex:      regexp.MustCompile(`xref:([^\[]+)\[([^\]]*)\]`),
+		headingRegex:     regexp.MustCompile(`^(=+)\s+(.+)$`),
+		attributeRegex:   regexp.MustCompile(`^:([a-zA-Z0-9_-]+):\s*(.*)$`),
+		includeRegex:     regexp.MustCompile(`^include::([^\[]+)\[([^\]]*)\]$`),
+		xrefRegex:        regexp.MustCompile(`xref:([^\[]+)\[([^\]]*)\]`),
+		positionEncoding: position.UTF16,
 	}
+}
+
+// SetPositionEncoding configures how LSP character offsets are interpreted.
+func (p *Parser) SetPositionEncoding(encoding position.Encoding) {
+	p.positionEncoding = encoding
 }
 
 // GetHoverInfo returns hover information for the given position
 func (p *Parser) GetHoverInfo(content string, pos protocol.Position) string {
 	lines := strings.Split(content, "\n")
-	if int(pos.Line) >= len(lines) {
+	if uint64(pos.Line) >= uint64(len(lines)) {
 		return ""
 	}
 
-	line := lines[pos.Line]
+	line := lines[int(pos.Line)]
 
 	// Check for heading
 	if matches := p.headingRegex.FindStringSubmatch(line); matches != nil {
@@ -57,12 +65,13 @@ func (p *Parser) GetHoverInfo(content string, pos protocol.Position) string {
 // GetCompletions returns completion items for the given position
 func (p *Parser) GetCompletions(content string, pos protocol.Position) []protocol.CompletionItem {
 	lines := strings.Split(content, "\n")
-	if int(pos.Line) >= len(lines) {
+	if uint64(pos.Line) >= uint64(len(lines)) {
 		return []protocol.CompletionItem{}
 	}
 
-	line := lines[pos.Line]
-	prefix := line[:pos.Character]
+	line := lines[int(pos.Line)]
+	byteOffset := position.ByteOffset(line, pos.Character, p.positionEncoding)
+	prefix := line[:byteOffset]
 
 	var items []protocol.CompletionItem
 
@@ -93,17 +102,19 @@ func (p *Parser) GetDocumentSymbols(content string) []protocol.DocumentSymbol {
 		if matches := p.headingRegex.FindStringSubmatch(line); matches != nil {
 			level := len(matches[1])
 			text := matches[2]
+			lineEnd := position.CharacterOffset(line, len(line), p.positionEncoding)
+			selectionStart := position.CharacterOffset(line, level+1, p.positionEncoding)
 
 			symbol := protocol.DocumentSymbol{
 				Name: text,
 				Kind: protocol.SymbolKindNamespace,
 				Range: protocol.Range{
 					Start: protocol.Position{Line: uint32(i), Character: 0},
-					End:   protocol.Position{Line: uint32(i), Character: uint32(len(line))},
+					End:   protocol.Position{Line: uint32(i), Character: lineEnd},
 				},
 				SelectionRange: protocol.Range{
-					Start: protocol.Position{Line: uint32(i), Character: uint32(level + 1)},
-					End:   protocol.Position{Line: uint32(i), Character: uint32(len(line))},
+					Start: protocol.Position{Line: uint32(i), Character: selectionStart},
+					End:   protocol.Position{Line: uint32(i), Character: lineEnd},
 				},
 			}
 

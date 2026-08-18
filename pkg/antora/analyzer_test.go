@@ -3,6 +3,7 @@ package antora
 import (
 	"testing"
 
+	"github.com/bovinemagnet/asciidoc-antora-ls/pkg/position"
 	"go.lsp.dev/protocol"
 )
 
@@ -82,4 +83,40 @@ func TestAnalyzer_GetDefinition(t *testing.T) {
 	if locations == nil {
 		t.Log("GetDefinition returned nil, which is acceptable for this test")
 	}
+}
+
+func TestAnalyzer_GetCompletions_PositionEncoding(t *testing.T) {
+	tests := []struct {
+		name      string
+		content   string
+		encoding  position.Encoding
+		character uint32
+	}{
+		{name: "UTF-16 Latin", content: "é xref:", encoding: position.UTF16, character: 7},
+		{name: "UTF-16 CJK", content: "界 xref:", encoding: position.UTF16, character: 7},
+		{name: "UTF-16 astral", content: "😀 xref:", encoding: position.UTF16, character: 8},
+		{name: "UTF-8 astral", content: "😀 xref:", encoding: position.UTF8, character: 10},
+		{name: "out of range", content: "界 xref:", encoding: position.UTF16, character: 100},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			analyzer := NewAnalyzer()
+			analyzer.SetPositionEncoding(tt.encoding)
+
+			items := analyzer.GetCompletions(tt.content, protocol.Position{Character: tt.character})
+			if !hasCompletion(items, "Page reference (same module)") {
+				t.Errorf("expected Antora xref completion for %q at character %d", tt.content, tt.character)
+			}
+		})
+	}
+}
+
+func hasCompletion(items []protocol.CompletionItem, label string) bool {
+	for _, item := range items {
+		if item.Label == label {
+			return true
+		}
+	}
+	return false
 }

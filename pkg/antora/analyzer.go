@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/bovinemagnet/asciidoc-antora-ls/pkg/position"
 	"go.lsp.dev/protocol"
 	"go.lsp.dev/uri"
 )
@@ -14,6 +15,7 @@ type Analyzer struct {
 	pageXrefRegex      *regexp.Regexp
 	componentXrefRegex *regexp.Regexp
 	attributeRegex     *regexp.Regexp
+	positionEncoding   position.Encoding
 }
 
 // NewAnalyzer creates a new Antora analyzer
@@ -22,18 +24,25 @@ func NewAnalyzer() *Analyzer {
 		pageXrefRegex:      regexp.MustCompile(`xref:([^:]+\.adoc|[^:]+::[^:]+\.adoc)\[([^\]]*)\]`),
 		componentXrefRegex: regexp.MustCompile(`xref:(\w+):(\w+):([^\[]+)\[([^\]]*)\]`),
 		attributeRegex:     regexp.MustCompile(`\{([a-zA-Z0-9_-]+)\}`),
+		positionEncoding:   position.UTF16,
 	}
+}
+
+// SetPositionEncoding configures how LSP character offsets are interpreted.
+func (a *Analyzer) SetPositionEncoding(encoding position.Encoding) {
+	a.positionEncoding = encoding
 }
 
 // GetCompletions returns Antora-specific completion items
 func (a *Analyzer) GetCompletions(content string, pos protocol.Position) []protocol.CompletionItem {
 	lines := strings.Split(content, "\n")
-	if int(pos.Line) >= len(lines) {
+	if uint64(pos.Line) >= uint64(len(lines)) {
 		return []protocol.CompletionItem{}
 	}
 
-	line := lines[pos.Line]
-	prefix := line[:pos.Character]
+	line := lines[int(pos.Line)]
+	byteOffset := position.ByteOffset(line, pos.Character, a.positionEncoding)
+	prefix := line[:byteOffset]
 
 	var items []protocol.CompletionItem
 
@@ -53,11 +62,11 @@ func (a *Analyzer) GetCompletions(content string, pos protocol.Position) []proto
 // GetDefinition returns the definition location for Antora cross-references
 func (a *Analyzer) GetDefinition(content string, pos protocol.Position, docURI uri.URI) []protocol.Location {
 	lines := strings.Split(content, "\n")
-	if int(pos.Line) >= len(lines) {
+	if uint64(pos.Line) >= uint64(len(lines)) {
 		return nil
 	}
 
-	line := lines[pos.Line]
+	line := lines[int(pos.Line)]
 
 	// Try to find an xref at the cursor position
 	if matches := a.pageXrefRegex.FindStringSubmatch(line); matches != nil {

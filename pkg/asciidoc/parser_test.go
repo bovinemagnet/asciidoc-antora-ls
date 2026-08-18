@@ -3,6 +3,7 @@ package asciidoc
 import (
 	"testing"
 
+	"github.com/bovinemagnet/asciidoc-antora-ls/pkg/position"
 	"go.lsp.dev/protocol"
 )
 
@@ -83,4 +84,59 @@ func TestParser_GetCompletions_BlockDelimiters(t *testing.T) {
 	if len(items) == 0 {
 		t.Error("Expected block delimiter completions, got none")
 	}
+}
+
+func TestParser_GetCompletions_PositionEncoding(t *testing.T) {
+	tests := []struct {
+		name      string
+		content   string
+		encoding  position.Encoding
+		character uint32
+	}{
+		{name: "UTF-16 Latin", content: "é xref:", encoding: position.UTF16, character: 7},
+		{name: "UTF-16 CJK", content: "界 xref:", encoding: position.UTF16, character: 7},
+		{name: "UTF-16 astral", content: "😀 xref:", encoding: position.UTF16, character: 8},
+		{name: "UTF-8 Latin", content: "é xref:", encoding: position.UTF8, character: 8},
+		{name: "out of range", content: "é xref:", encoding: position.UTF16, character: 100},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser := NewParser()
+			parser.SetPositionEncoding(tt.encoding)
+
+			items := parser.GetCompletions(tt.content, protocol.Position{Character: tt.character})
+			if !hasCompletion(items, "xref") {
+				t.Errorf("expected xref completion for %q at character %d", tt.content, tt.character)
+			}
+		})
+	}
+}
+
+func TestParser_GetDocumentSymbols_PositionEncoding(t *testing.T) {
+	parser := NewParser()
+	parser.SetPositionEncoding(position.UTF16)
+
+	symbols := parser.GetDocumentSymbols("= Hé😀")
+	if len(symbols) != 1 {
+		t.Fatalf("expected one symbol, got %d", len(symbols))
+	}
+	if got := symbols[0].Range.End.Character; got != 6 {
+		t.Errorf("UTF-16 range end = %d, want 6", got)
+	}
+
+	parser.SetPositionEncoding(position.UTF8)
+	symbols = parser.GetDocumentSymbols("= Hé😀")
+	if got := symbols[0].Range.End.Character; got != 9 {
+		t.Errorf("UTF-8 range end = %d, want 9", got)
+	}
+}
+
+func hasCompletion(items []protocol.CompletionItem, label string) bool {
+	for _, item := range items {
+		if item.Label == label {
+			return true
+		}
+	}
+	return false
 }

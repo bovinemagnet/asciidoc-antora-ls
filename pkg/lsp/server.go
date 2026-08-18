@@ -9,6 +9,7 @@ import (
 
 	"github.com/bovinemagnet/asciidoc-antora-ls/pkg/antora"
 	"github.com/bovinemagnet/asciidoc-antora-ls/pkg/asciidoc"
+	"github.com/bovinemagnet/asciidoc-antora-ls/pkg/position"
 	"github.com/sourcegraph/jsonrpc2"
 	"go.lsp.dev/protocol"
 	"go.lsp.dev/uri"
@@ -16,10 +17,11 @@ import (
 
 // Server implements the LSP server for AsciiDoc and Antora
 type Server struct {
-	mu        sync.RWMutex
-	documents map[string]*Document
-	parser    *asciidoc.Parser
-	antora    *antora.Analyzer
+	mu               sync.RWMutex
+	documents        map[string]*Document
+	parser           *asciidoc.Parser
+	antora           *antora.Analyzer
+	positionEncoding position.Encoding
 }
 
 // Document represents an open document in the editor
@@ -29,34 +31,57 @@ type Document struct {
 	Version int32
 }
 
+// ServerCapabilities adds LSP 3.17 position encoding support to the protocol
+// dependency's older capability model.
+type ServerCapabilities struct {
+	protocol.ServerCapabilities
+	PositionEncoding position.Encoding `json:"positionEncoding"`
+}
+
+// InitializeResult is the server's response to an initialize request.
+type InitializeResult struct {
+	Capabilities ServerCapabilities   `json:"capabilities"`
+	ServerInfo   *protocol.ServerInfo `json:"serverInfo,omitempty"`
+}
+
 // NewServer creates a new LSP server instance
 func NewServer() *Server {
+	parser := asciidoc.NewParser()
+	antoraAnalyzer := antora.NewAnalyzer()
 	return &Server{
-		documents: make(map[string]*Document),
-		parser:    asciidoc.NewParser(),
-		antora:    antora.NewAnalyzer(),
+		documents:        make(map[string]*Document),
+		parser:           parser,
+		antora:           antoraAnalyzer,
+		positionEncoding: position.UTF16,
 	}
 }
 
 // Initialize handles the initialize request
-func (s *Server) Initialize(ctx context.Context, params *protocol.InitializeParams) (*protocol.InitializeResult, error) {
+func (s *Server) Initialize(ctx context.Context, params *protocol.InitializeParams, offeredEncodings ...position.Encoding) (*InitializeResult, error) {
 	log.Printf("Initialize request from client: %s", params.ClientInfo.Name)
 
-	return &protocol.InitializeResult{
-		Capabilities: protocol.ServerCapabilities{
-			TextDocumentSync: protocol.TextDocumentSyncOptions{
-				OpenClose: true,
-				Change:    protocol.TextDocumentSyncKindFull,
-				Save: &protocol.SaveOptions{
-					IncludeText: false,
+	s.positionEncoding = selectPositionEncoding(offeredEncodings)
+	s.parser.SetPositionEncoding(s.positionEncoding)
+	s.antora.SetPositionEncoding(s.positionEncoding)
+
+	return &InitializeResult{
+		Capabilities: ServerCapabilities{
+			PositionEncoding: s.positionEncoding,
+			ServerCapabilities: protocol.ServerCapabilities{
+				TextDocumentSync: protocol.TextDocumentSyncOptions{
+					OpenClose: true,
+					Change:    protocol.TextDocumentSyncKindFull,
+					Save: &protocol.SaveOptions{
+						IncludeText: false,
+					},
 				},
+				HoverProvider: true,
+				CompletionProvider: &protocol.CompletionOptions{
+					TriggerCharacters: []string{":", "{", "["},
+				},
+				DefinitionProvider:     true,
+				DocumentSymbolProvider: true,
 			},
-			HoverProvider: true,
-			CompletionProvider: &protocol.CompletionOptions{
-				TriggerCharacters: []string{":", "{", "["},
-			},
-			DefinitionProvider:     true,
-			DocumentSymbolProvider: true,
 		},
 		ServerInfo: &protocol.ServerInfo{
 			Name:    "asciidoc-antora-ls",
@@ -255,7 +280,12 @@ func (s *Server) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.
 			replyWithError(&jsonrpc2.Error{Code: jsonrpc2.CodeInvalidParams, Message: err.Error()})
 			return
 		}
-		result, err := s.Initialize(ctx, &params)
+		positionEncodings, err := clientPositionEncodings(*req.Params)
+		if err != nil {
+			replyWithError(&jsonrpc2.Error{Code: jsonrpc2.CodeInvalidParams, Message: err.Error()})
+			return
+		}
+		result, err := s.Initialize(ctx, &params, positionEncodings...)
 		if err != nil {
 			replyWithError(&jsonrpc2.Error{Code: jsonrpc2.CodeInternalError, Message: err.Error()})
 			return
@@ -379,6 +409,29 @@ func (s *Server) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.
 		}
 		replyWithError(&jsonrpc2.Error{Code: jsonrpc2.CodeMethodNotFound, Message: "method not found"})
 	}
+}
+
+func selectPositionEncoding(offered []position.Encoding) position.Encoding {
+	for _, encoding := range offered {
+		if encoding == position.UTF8 || encoding == position.UTF16 {
+			return encoding
+		}
+	}
+	return position.UTF16
+}
+
+func clientPositionEncodings(params json.RawMessage) ([]position.Encoding, error) {
+	var capabilities struct {
+		Capabilities struct {
+			General struct {
+				PositionEncodings []position.Encoding `json:"positionEncodings"`
+			} `json:"general"`
+		} `json:"capabilities"`
+	}
+	if err := json.Unmarshal(params, &capabilities); err != nil {
+		return nil, err
+	}
+	return capabilities.Capabilities.General.PositionEncodings, nil
 }
 
 // rwc wraps a reader and writer

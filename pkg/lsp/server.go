@@ -22,6 +22,8 @@ type Server struct {
 	parser           *asciidoc.Parser
 	antora           *antora.Analyzer
 	positionEncoding position.Encoding
+	logger           *log.Logger
+	logLevel         LogLevel
 }
 
 // Document represents an open document in the editor
@@ -45,20 +47,26 @@ type InitializeResult struct {
 }
 
 // NewServer creates a new LSP server instance
-func NewServer() *Server {
+func NewServer(options ...Option) *Server {
 	parser := asciidoc.NewParser()
 	antoraAnalyzer := antora.NewAnalyzer()
-	return &Server{
+	server := &Server{
 		documents:        make(map[string]*Document),
 		parser:           parser,
 		antora:           antoraAnalyzer,
 		positionEncoding: position.UTF16,
+		logger:           log.Default(),
+		logLevel:         LogLevelInfo,
 	}
+	for _, option := range options {
+		option(server)
+	}
+	return server
 }
 
 // Initialize handles the initialize request
 func (s *Server) Initialize(ctx context.Context, params *protocol.InitializeParams, offeredEncodings ...position.Encoding) (*InitializeResult, error) {
-	log.Printf("Initialize request from client: %s", params.ClientInfo.Name)
+	s.logf(LogLevelInfo, "Initialize request from client: %s", params.ClientInfo.Name)
 
 	s.positionEncoding = selectPositionEncoding(offeredEncodings)
 	s.parser.SetPositionEncoding(s.positionEncoding)
@@ -85,26 +93,26 @@ func (s *Server) Initialize(ctx context.Context, params *protocol.InitializePara
 		},
 		ServerInfo: &protocol.ServerInfo{
 			Name:    "asciidoc-antora-ls",
-			Version: "0.1.0",
+			Version: Version,
 		},
 	}, nil
 }
 
 // Initialized handles the initialized notification
 func (s *Server) Initialized(ctx context.Context, params *protocol.InitializedParams) error {
-	log.Println("Server initialized")
+	s.logf(LogLevelInfo, "Server initialized")
 	return nil
 }
 
 // Shutdown handles the shutdown request
 func (s *Server) Shutdown(ctx context.Context) error {
-	log.Println("Server shutdown requested")
+	s.logf(LogLevelInfo, "Server shutdown requested")
 	return nil
 }
 
 // Exit handles the exit notification
 func (s *Server) Exit(ctx context.Context) error {
-	log.Println("Server exit")
+	s.logf(LogLevelInfo, "Server exit")
 	return nil
 }
 
@@ -114,7 +122,7 @@ func (s *Server) DidOpen(ctx context.Context, params *protocol.DidOpenTextDocume
 	defer s.mu.Unlock()
 
 	docURI := string(params.TextDocument.URI)
-	log.Printf("Document opened: %s", docURI)
+	s.logf(LogLevelInfo, "Document opened: %s", docURI)
 
 	s.documents[docURI] = &Document{
 		URI:     docURI,
@@ -141,14 +149,14 @@ func (s *Server) DidChange(ctx context.Context, params *protocol.DidChangeTextDo
 	}
 	doc.Version = params.TextDocument.Version
 
-	log.Printf("Document changed: %s (version %d)", docURI, doc.Version)
+	s.logf(LogLevelDebug, "Document changed: %s (version %d)", docURI, doc.Version)
 	return nil
 }
 
 // DidSave handles document save notifications
 func (s *Server) DidSave(ctx context.Context, params *protocol.DidSaveTextDocumentParams) error {
 	docURI := string(params.TextDocument.URI)
-	log.Printf("Document saved: %s", docURI)
+	s.logf(LogLevelInfo, "Document saved: %s", docURI)
 	return nil
 }
 
@@ -159,7 +167,7 @@ func (s *Server) DidClose(ctx context.Context, params *protocol.DidCloseTextDocu
 
 	docURI := string(params.TextDocument.URI)
 	delete(s.documents, docURI)
-	log.Printf("Document closed: %s", docURI)
+	s.logf(LogLevelInfo, "Document closed: %s", docURI)
 	return nil
 }
 
@@ -255,7 +263,7 @@ func (s *Server) Run(ctx context.Context, reader interface{ Read([]byte) (int, e
 // runJSONRPC runs the JSON-RPC server
 func (s *Server) runJSONRPC(ctx context.Context, reader interface{ Read([]byte) (int, error) }, writer interface{ Write([]byte) (int, error) }) error {
 	stream := jsonrpc2.NewBufferedStream(&rwc{reader, writer}, jsonrpc2.VSCodeObjectCodec{})
-	conn := jsonrpc2.NewConn(ctx, stream, s)
+	conn := jsonrpc2.NewConn(ctx, stream, s, jsonrpc2.SetLogger(s.logger))
 	<-conn.DisconnectNotify()
 	return nil
 }
@@ -264,12 +272,12 @@ func (s *Server) runJSONRPC(ctx context.Context, reader interface{ Read([]byte) 
 func (s *Server) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Request) {
 	reply := func(result interface{}) {
 		if err := conn.Reply(ctx, req.ID, result); err != nil {
-			log.Printf("Failed to reply to %s: %v", req.Method, err)
+			s.logf(LogLevelError, "Failed to reply to %s: %v", req.Method, err)
 		}
 	}
 	replyWithError := func(responseErr *jsonrpc2.Error) {
 		if err := conn.ReplyWithError(ctx, req.ID, responseErr); err != nil {
-			log.Printf("Failed to send %s error response: %v", req.Method, err)
+			s.logf(LogLevelError, "Failed to send %s error response: %v", req.Method, err)
 		}
 	}
 
@@ -299,7 +307,7 @@ func (s *Server) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.
 			return
 		}
 		if err := s.Initialized(ctx, &params); err != nil {
-			log.Printf("Failed to handle initialized notification: %v", err)
+			s.logf(LogLevelError, "Failed to handle initialized notification: %v", err)
 		}
 
 	case "shutdown":
@@ -311,7 +319,10 @@ func (s *Server) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.
 
 	case "exit":
 		if err := s.Exit(ctx); err != nil {
-			log.Printf("Failed to handle exit notification: %v", err)
+			s.logf(LogLevelError, "Failed to handle exit notification: %v", err)
+		}
+		if err := conn.Close(); err != nil && err != jsonrpc2.ErrClosed {
+			s.logf(LogLevelError, "Failed to close connection after exit: %v", err)
 		}
 
 	case "textDocument/didOpen":
@@ -320,7 +331,7 @@ func (s *Server) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.
 			return
 		}
 		if err := s.DidOpen(ctx, &params); err != nil {
-			log.Printf("Failed to handle didOpen notification: %v", err)
+			s.logf(LogLevelError, "Failed to handle didOpen notification: %v", err)
 		}
 
 	case "textDocument/didChange":
@@ -329,7 +340,7 @@ func (s *Server) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.
 			return
 		}
 		if err := s.DidChange(ctx, &params); err != nil {
-			log.Printf("Failed to handle didChange notification: %v", err)
+			s.logf(LogLevelError, "Failed to handle didChange notification: %v", err)
 		}
 
 	case "textDocument/didSave":
@@ -338,7 +349,7 @@ func (s *Server) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.
 			return
 		}
 		if err := s.DidSave(ctx, &params); err != nil {
-			log.Printf("Failed to handle didSave notification: %v", err)
+			s.logf(LogLevelError, "Failed to handle didSave notification: %v", err)
 		}
 
 	case "textDocument/didClose":
@@ -347,7 +358,7 @@ func (s *Server) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.
 			return
 		}
 		if err := s.DidClose(ctx, &params); err != nil {
-			log.Printf("Failed to handle didClose notification: %v", err)
+			s.logf(LogLevelError, "Failed to handle didClose notification: %v", err)
 		}
 
 	case "textDocument/hover":

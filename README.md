@@ -37,6 +37,9 @@ cd asciidoc-antora-ls
 # Build the binary
 make build
 
+# Override the version embedded in the binary
+make build VERSION=1.2.3
+
 # Install to $GOPATH/bin
 make install
 ```
@@ -52,8 +55,13 @@ The language server communicates via JSON-RPC over stdin/stdout, following the L
 ### Running the Server
 
 ```bash
-./bin/asciidoc-antora-ls
+./bin/asciidoc-antora-ls --stdio
 ```
+
+The server uses stdio by default; `--stdio` is accepted for editor compatibility.
+Run `--version` to print the build version. Use `--log-file <path>` to capture
+diagnostics and `--log-level error|info|debug` to control verbosity. The default
+`info` level suppresses high-frequency document-change messages.
 
 ### Editor Integration
 

@@ -52,8 +52,8 @@ func TestServer_Initialize(t *testing.T) {
 		if result.ServerInfo.Name != "asciidoc-antora-ls" {
 			t.Errorf("Expected server name 'asciidoc-antora-ls', got '%s'", result.ServerInfo.Name)
 		}
-		if result.ServerInfo.Version != Version {
-			t.Errorf("server version = %q, want %q", result.ServerInfo.Version, Version)
+		if result.ServerInfo.Version != VersionString() {
+			t.Errorf("server version = %q, want %q", result.ServerInfo.Version, VersionString())
 		}
 	}
 

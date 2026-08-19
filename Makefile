@@ -1,16 +1,21 @@
 GO_FILES := $(shell find . -type f -name '*.go')
 VERSION ?= 0.1.0
-LDFLAGS := -X github.com/bovinemagnet/asciidoc-antora-ls/pkg/lsp.Version=$(VERSION)
+COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null)
+BUILD_DATE ?= $(shell git show -s --format=%cI HEAD 2>/dev/null)
+LDFLAGS := -s -w \
+	-X github.com/bovinemagnet/asciidoc-antora-ls/pkg/lsp.Version=$(VERSION) \
+	-X github.com/bovinemagnet/asciidoc-antora-ls/pkg/lsp.Commit=$(COMMIT) \
+	-X github.com/bovinemagnet/asciidoc-antora-ls/pkg/lsp.BuildDate=$(BUILD_DATE)
 
 .PHONY: build install test test-coverage lint clean run fmt fmt-check vet
 
 # Build the language server
 build:
-	go build -ldflags "$(LDFLAGS)" -o bin/asciidoc-antora-ls ./cmd/asciidoc-antora-ls
+	go build -trimpath -ldflags "$(LDFLAGS)" -o bin/asciidoc-antora-ls ./cmd/asciidoc-antora-ls
 
 # Install the language server
 install:
-	go install -ldflags "$(LDFLAGS)" ./cmd/asciidoc-antora-ls
+	go install -trimpath -ldflags "$(LDFLAGS)" ./cmd/asciidoc-antora-ls
 
 # Run tests
 test:

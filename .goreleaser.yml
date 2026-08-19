@@ -1,0 +1,58 @@
+version: 2
+
+project_name: asciidoc-antora-ls
+
+builds:
+  - id: asciidoc-antora-ls
+    main: ./cmd/asciidoc-antora-ls
+    binary: asciidoc-antora-ls
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - >-
+        -s -w
+        -X github.com/bovinemagnet/asciidoc-antora-ls/pkg/lsp.Version={{ .Tag }}
+        -X github.com/bovinemagnet/asciidoc-antora-ls/pkg/lsp.Commit={{ .Commit }}
+        -X github.com/bovinemagnet/asciidoc-antora-ls/pkg/lsp.BuildDate={{ .CommitDate }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - ids:
+      - asciidoc-antora-ls
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - src: LICENSE
+        info:
+          mtime: "{{ .CommitDate }}"
+      - src: README.md
+        info:
+          mtime: "{{ .CommitDate }}"
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'

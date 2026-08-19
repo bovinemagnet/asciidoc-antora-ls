@@ -29,7 +29,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 
 	if *showVersion {
-		if _, err := fmt.Fprintln(stdout, lsp.Version); err != nil {
+		if _, err := fmt.Fprintln(stdout, lsp.VersionString()); err != nil {
 			writeError(stderr, "write version: %v\n", err)
 			return 1
 		}

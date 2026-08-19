@@ -59,8 +59,8 @@ func TestServer_JSONRPCSession(t *testing.T) {
 	}, &initializeResult); err != nil {
 		t.Fatalf("initialize request: %v", err)
 	}
-	if initializeResult.ServerInfo == nil || initializeResult.ServerInfo.Version != Version {
-		t.Fatalf("server version = %#v, want %q", initializeResult.ServerInfo, Version)
+	if initializeResult.ServerInfo == nil || initializeResult.ServerInfo.Version != VersionString() {
+		t.Fatalf("server version = %#v, want %q", initializeResult.ServerInfo, VersionString())
 	}
 	capabilities := initializeResult.Capabilities
 	if capabilities.HoverProvider != true || capabilities.CompletionProvider == nil || capabilities.DefinitionProvider != true || capabilities.DocumentSymbolProvider != true {

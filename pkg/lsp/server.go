@@ -93,7 +93,7 @@ func (s *Server) Initialize(ctx context.Context, params *protocol.InitializePara
 		},
 		ServerInfo: &protocol.ServerInfo{
 			Name:    "asciidoc-antora-ls",
-			Version: Version,
+			Version: VersionString(),
 		},
 	}, nil
 }

@@ -26,8 +26,8 @@ func TestRunVersion(t *testing.T) {
 	if exitCode := run([]string{"--version"}, strings.NewReader(""), &stdout, &stderr); exitCode != 0 {
 		t.Fatalf("run --version exit code = %d, stderr = %q", exitCode, stderr.String())
 	}
-	if got := strings.TrimSpace(stdout.String()); got != lsp.Version {
-		t.Fatalf("version output = %q, want %q", got, lsp.Version)
+	if got := strings.TrimSpace(stdout.String()); got != lsp.VersionString() {
+		t.Fatalf("version output = %q, want %q", got, lsp.VersionString())
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("version wrote to stderr: %q", stderr.String())
@@ -96,8 +96,8 @@ func runCLISession(t *testing.T, args []string) ([]byte, string) {
 	}, &initializeResult); err != nil {
 		t.Fatalf("initialize request: %v", err)
 	}
-	if initializeResult.ServerInfo == nil || initializeResult.ServerInfo.Version != lsp.Version {
-		t.Fatalf("server version = %#v, want %q", initializeResult.ServerInfo, lsp.Version)
+	if initializeResult.ServerInfo == nil || initializeResult.ServerInfo.Version != lsp.VersionString() {
+		t.Fatalf("server version = %#v, want %q", initializeResult.ServerInfo, lsp.VersionString())
 	}
 	if err := client.Notify(ctx, "initialized", protocol.InitializedParams{}); err != nil {
 		t.Fatalf("initialized notification: %v", err)

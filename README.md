@@ -46,7 +46,22 @@ make install
 
 ### Binary Release
 
-Download the latest release from the [releases page](https://github.com/bovinemagnet/asciidoc-antora-ls/releases).
+Download the latest archive and `checksums.txt` from the
+[releases page](https://github.com/bovinemagnet/asciidoc-antora-ls/releases).
+Choose the archive matching your platform:
+
+| Platform | Archive suffix |
+| --- | --- |
+| macOS Apple silicon | `darwin_arm64.tar.gz` |
+| macOS Intel | `darwin_amd64.tar.gz` |
+| Linux x86-64 | `linux_amd64.tar.gz` |
+| Linux ARM64 | `linux_arm64.tar.gz` |
+| Windows x86-64 | `windows_amd64.zip` |
+
+Verify the archive against `checksums.txt`, extract it, and place
+`asciidoc-antora-ls` (or `asciidoc-antora-ls.exe`) somewhere on your `PATH`.
+Run `asciidoc-antora-ls --version` to confirm the installed release and its
+source revision.
 
 ## Usage
 
